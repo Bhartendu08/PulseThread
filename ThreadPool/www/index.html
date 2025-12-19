@@ -1,0 +1,127 @@
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pulse Thread</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --accent: #38bdf8;
+            --text: #f8fafc;
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 40px; }
+        h1 { font-weight: 600; letter-spacing: -1px; color: var(--accent); }
+        
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-top: 30px; }
+        .card { background: var(--card-bg); padding: 24px; border-radius: 12px; border: 1px solid #334155; transition: transform 0.2s; }
+        .card:hover { transform: translateY(-5px); }
+        .card h2 { font-size: 0.875rem; color: #94a3b8; text-transform: uppercase; margin: 0; }
+        .card p { font-size: 2.5rem; font-weight: 600; margin: 10px 0; }
+
+        #log-container { margin-top: 30px; background: #000; border-radius: 12px; padding: 20px; border: 1px solid #334155; }
+        #log { font-family: 'Fira Code', monospace; font-size: 0.9rem; color: #10b981; height: 150px; overflow-y: auto; }
+        .status-dot { height: 10px; width: 10px; background-color: #10b981; border-radius: 50%; display: inline-block; margin-right: 8px; }
+    </style>
+</head>
+<body>
+    <h1><span class="status-dot"></span>Pulse Thread <small style="font-size: 1rem; color: #94a3b8;">v1.0.0</small></h1>
+
+    <div class="grid">
+        <div class="card">
+            <h2>Total Incoming Requests</h2>
+            <p id="req">0</p>
+        </div>
+        <div class="card">
+            <h2>Active Worker Threads</h2>
+            <p id="threads">0</p>
+        </div>
+        <div class="card">
+            <h2>Server Uptime</h2>
+            <p><span id="uptime">0</span>s</p>
+        </div>
+        <div class="card">
+            <h2>Last Client IP</h2>
+            <p id="lastIp" style="font-size: 1.5rem;">None</p>
+        </div>
+    </div>
+    <div class="card" style="margin-top: 20px; width: auto;">
+        <h2>Live Traffic Trend (Total Requests)</h2>
+        <div style="height: 250px;">
+        <canvas id="trafficChart"></canvas>
+    </div>
+    </div>
+
+    <div id="log-container">
+        <div style="color: #94a3b8; margin-bottom: 10px; font-size: 0.75rem;">LIVE TRAFFIC LOG</div>
+        <div id="log">--- Initializing Connection to Java Server ---</div>
+    </div>
+
+    <script>
+        let lastCount = 0;
+        function updateStats() {
+            fetch('/stats').then(r => r.json()).then(data => {
+                document.getElementById('uptime').innerText = data.uptime;
+                document.getElementById('req').innerText = data.total;
+                document.getElementById('threads').innerText = data.active;
+                document.getElementById('lastIp').innerText = data.lastIp;
+
+                // Only add to log if a new request actually happened
+                if(data.total > lastCount) {
+                    const log = document.getElementById('log');
+                    const time = new Date().toLocaleTimeString();
+                    log.innerHTML += `<div><span style="color: #38bdf8;">[${time}]</span> Handled TCP Connection from ${data.lastIp}</div>`;
+                    log.scrollTop = log.scrollHeight;
+                    lastCount = data.total;
+                }
+            });
+        }
+        setInterval(updateStats, 1000);
+    </script>
+</body>
+</html>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    let lastCount = 0;
+    const ctx = document.getElementById('trafficChart').getContext('2d');
+    
+    // Initialize the chart
+    const trafficChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                label: 'Requests',
+                data: [],
+                borderColor: '#38bdf8',
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false
+        }
+    });
+
+    // Start your update loop
+    setInterval(() => {
+        fetch('/stats')
+            .then(r => r.json())
+            .then(data => {
+                // ... update chart logic ...
+                const now = new Date().toLocaleTimeString();
+                trafficChart.data.labels.push(now);
+                trafficChart.data.datasets[0].data.push(data.total);
+                
+                if (trafficChart.data.labels.length > 15) {
+                    trafficChart.data.labels.shift();
+                    trafficChart.data.datasets[0].data.shift();
+                }
+                trafficChart.update();
+            });
+    }, 1000);
+});
+</script>
